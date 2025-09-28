@@ -12,12 +12,12 @@ import SwiftData
 struct SwiftDashApp: App {
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
-            Item.self,
+            Service.self,
+            AppSettings.self,
         ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-
+       
         do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
+            return try ModelContainer(for: schema)
         } catch {
             fatalError("Could not create ModelContainer: \(error)")
         }
@@ -30,3 +30,4 @@ struct SwiftDashApp: App {
         .modelContainer(sharedModelContainer)
     }
 }
+
