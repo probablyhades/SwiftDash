@@ -14,6 +14,7 @@ struct SwiftDashApp: App {
         let schema = Schema([
             Service.self,
             AppSettings.self,
+            ServiceCategory.self,
         ])
        
         do {

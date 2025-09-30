@@ -22,6 +22,7 @@ struct ContentView: View {
     @State private var newServiceHost = ""
     @State private var newServiceUseHTTPS: Bool = false
     @State private var newServiceSymbol = "globe"
+    @State private var newServiceCategory = ""
     @State private var showingSettings = false
     @State private var showingEditService = false
     @State private var editServiceName = ""
@@ -29,6 +30,7 @@ struct ContentView: View {
     @State private var editServiceHost = ""
     @State private var editServiceUseHTTPS: Bool = false
     @State private var editServiceSymbol = "globe"
+    @State private var editServiceCategory = ""
     @State private var serviceToEdit: Service?
 
     private var settings: AppSettings {
@@ -38,57 +40,100 @@ struct ContentView: View {
         return created
     }
 
+    private var groupedServices: [(category: String, services: [Service])] {
+        let groups = Dictionary(grouping: services) { service in
+            let raw = service.category?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return raw.isEmpty ? "Uncategorized" : raw
+        }
+        let sortedKeys = groups.keys.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+        return sortedKeys.map { key in
+            let sortedServices = (groups[key] ?? []).sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+            return (category: key, services: sortedServices)
+        }
+    }
+
+    private let defaultCategories: [String] = [
+        "Entertainment",
+        "Financial",
+        "Creative",
+        "AI",
+        "Productivity",
+        "Developer",
+        "Utilities",
+        "Security",
+        "Monitoring",
+        "Networking",
+        "Storage",
+        "Home",
+        "Education",
+    ]
+
+    private var existingCategories: [String] {
+        let serviceCategories = services
+            .compactMap { $0.category?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        let all = Set(serviceCategories).union(Set(defaultCategories))
+        return Array(all).sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+    }
+
     var body: some View {
         NavigationSplitView {
             List {
-                Section("Services") {
-                    if services.isEmpty {
+                if services.isEmpty {
+                    Section("Services") {
                         ContentUnavailableView(
                             "No Services",
                             systemImage: "square.stack.3d.up.slash",
-                            description: Text("Tap + to create your first service.")
+                            description: Text("Tap + to create your first service, or open Settings to create your categories.")
                         )
-                    } else {
-                        ForEach(services) { service in
-                            Button {
-                                open(service)
-                            } label: {
-                                HStack {
-                                    Image(systemName: service.symbolName?.isEmpty == false ? service.symbolName! : "globe")
-                                        .foregroundStyle(.tint)
-                                    VStack(alignment: .leading) {
-                                        Text(service.name)
-                                            .font(.headline)
-                                        Text(urlString(for: service))
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
+                    }
+                } else {
+                    ForEach(groupedServices, id: \.category) { group in
+                        Section(group.category) {
+                            ForEach(group.services) { service in
+                                Button {
+                                    open(service)
+                                } label: {
+                                    HStack {
+                                        Image(systemName: service.symbolName?.isEmpty == false ? service.symbolName! : "globe")
+                                            .foregroundStyle(.tint)
+                                        VStack(alignment: .leading) {
+                                            Text(service.name)
+                                                .font(.headline)
+                                            Text(urlString(for: service))
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        Spacer()
                                     }
-                                    Spacer()
+                                }
+                                .buttonStyle(.plain)
+                                .contextMenu {
+                                    Button { beginEdit(service) } label: {
+                                        Label("Edit", systemImage: "pencil")
+                                    }
+                                    Button { open(service) } label: {
+                                        Label("Open", systemImage: "safari")
+                                    }
+                                    Button(role: .destructive) { delete(service) } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
+                                }
+                                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                    Button(role: .destructive) { delete(service) } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
+                                    Button { beginEdit(service) } label: {
+                                        Label("Edit", systemImage: "pencil")
+                                    }
+                                    .tint(.blue)
                                 }
                             }
-                            .buttonStyle(.plain)
-                            .contextMenu {
-                                Button { beginEdit(service) } label: {
-                                    Label("Edit", systemImage: "pencil")
-                                }
-                                Button { open(service) } label: {
-                                    Label("Open", systemImage: "safari")
-                                }
-                                Button(role: .destructive) { delete(service) } label: {
-                                    Label("Delete", systemImage: "trash")
-                                }
-                            }
-                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                Button(role: .destructive) { delete(service) } label: {
-                                    Label("Delete", systemImage: "trash")
-                                }
-                                Button { beginEdit(service) } label: {
-                                    Label("Edit", systemImage: "pencil")
-                                }
-                                .tint(.blue)
+                            .onDelete { offsets in
+                                let items = group.services
+                                for index in offsets { delete(items[index]) }
                             }
                         }
-                        .onDelete(perform: delete(at:))
                     }
                 }
             }
@@ -110,6 +155,7 @@ struct ContentView: View {
                         newServiceHost = ""
                         newServiceUseHTTPS = settings.useHTTPS
                         newServiceSymbol = "globe"
+                        newServiceCategory = ""
                     } label: {
                         Label("Add Service", systemImage: "plus")
                     }
@@ -130,6 +176,13 @@ struct ContentView: View {
                 Form {
                     Section("Details") {
                         TextField("Service name", text: $newServiceName)
+                        Picker("Category", selection: $newServiceCategory) {
+                            Text("Uncategorized").tag("")
+                            ForEach(existingCategories, id: \.self) { cat in
+                                Text(cat).tag(cat)
+                            }
+                        }
+                        .pickerStyle(.menu)
                         TextField("Host/IP (optional)", text: $newServiceHost)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
@@ -174,13 +227,20 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showingSettings) {
             NavigationStack { SettingsView() }
-            .presentationDetents([.medium])
+            .presentationDetents([.large])
         }
         .sheet(isPresented: $showingEditService) {
             NavigationStack {
                 Form {
                     Section("Details") {
                         TextField("Service name", text: $editServiceName)
+                        Picker("Category", selection: $editServiceCategory) {
+                            Text("Uncategorized").tag("")
+                            ForEach(existingCategories, id: \.self) { cat in
+                                Text(cat).tag(cat)
+                            }
+                        }
+                        .pickerStyle(.menu)
                         TextField("Host/IP (optional)", text: $editServiceHost)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
@@ -221,7 +281,7 @@ struct ContentView: View {
                     }
                 }
             }
-            .presentationDetents([.medium])
+            .presentationDetents([.large])
         }
     }
 
@@ -236,6 +296,8 @@ struct ContentView: View {
             service.customHost = trimmedHost.isEmpty ? nil : trimmedHost
             service.customUseHTTPS = newServiceUseHTTPS
             service.symbolName = newServiceSymbol.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : newServiceSymbol
+            let trimmedCategory = newServiceCategory.trimmingCharacters(in: .whitespacesAndNewlines)
+            service.category = trimmedCategory.isEmpty ? nil : trimmedCategory
             modelContext.insert(service)
             showingAddService = false
         }
@@ -256,6 +318,7 @@ struct ContentView: View {
         editServiceHost = service.customHost ?? ""
         editServiceUseHTTPS = service.customUseHTTPS ?? settings.useHTTPS
         editServiceSymbol = service.symbolName ?? "globe"
+        editServiceCategory = service.category ?? ""
         showingEditService = true
     }
 
@@ -274,6 +337,8 @@ struct ContentView: View {
             service.customUseHTTPS = editServiceUseHTTPS
             let trimmedSymbol = editServiceSymbol.trimmingCharacters(in: .whitespacesAndNewlines)
             service.symbolName = trimmedSymbol.isEmpty ? nil : trimmedSymbol
+            let trimmedCategory = editServiceCategory.trimmingCharacters(in: .whitespacesAndNewlines)
+            service.category = trimmedCategory.isEmpty ? nil : trimmedCategory
             showingEditService = false
             serviceToEdit = nil
         }
@@ -323,4 +388,3 @@ struct ContentView: View {
     ContentView()
         .modelContainer(for: [Service.self, AppSettings.self], inMemory: true)
 }
-

@@ -8,6 +8,7 @@ final class Service {
     var customHost: String?
     var customUseHTTPS: Bool?
     var symbolName: String?
+    var category: String?
     var createdAt: Date
 
     init(name: String, port: Int, createdAt: Date = .now) {
